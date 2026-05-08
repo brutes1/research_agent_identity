@@ -1,0 +1,379 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/brutes1/research_agent_identity/agentic-identity-reference.schema.json",
+  "title": "Agentic Identity Reference Schema",
+  "description": "JSON Schema for validating docs/agentic-identity-reference.yaml",
+  "type": "object",
+  "required": ["schema_version", "data_version", "last_verified", "id_registry", "mechanisms", "scenarios", "glossary"],
+  "additionalProperties": true,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "description": "Schema version (semver-like string)"
+    },
+    "data_version": {
+      "type": "string",
+      "description": "Data version (semver)"
+    },
+    "last_verified": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+      "description": "ISO 8601 date of last verification"
+    },
+    "description": {
+      "type": "string"
+    },
+    "id_registry": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "status"],
+        "properties": {
+          "id": { "type": "string" },
+          "status": {
+            "type": "string",
+            "enum": ["active", "aliased", "retired"]
+          }
+        }
+      }
+    },
+    "mechanisms": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/mechanism" }
+    },
+    "scenarios": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/scenario" }
+    },
+    "glossary": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/glossary_entry" }
+    },
+    "decision_tree": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/decision_rule" }
+    },
+    "anti_patterns": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/anti_pattern" }
+    }
+  },
+  "$defs": {
+    "mechanism": {
+      "type": "object",
+      "required": [
+        "id",
+        "name",
+        "status",
+        "token_type",
+        "holder_bound",
+        "requires_user",
+        "security_assurance",
+        "production_readiness",
+        "implementation_complexity",
+        "last_verified"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^mech:",
+          "description": "Stable namespaced identifier"
+        },
+        "name": {
+          "type": "string"
+        },
+        "aliases": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "status": {
+          "type": "string",
+          "enum": ["stable", "experimental", "deprecated", "draft"]
+        },
+        "rfc": {
+          "type": ["string", "null"]
+        },
+        "token_type": {
+          "type": "string",
+          "enum": [
+            "jwt",
+            "jwt_or_opaque",
+            "opaque",
+            "x509_certificate",
+            "dpop_bound_jwt",
+            "aws_temporary_credentials",
+            "gcp_access_token",
+            "azure_access_token",
+            "capability_token",
+            "jws_signed_request",
+            "oidc_id_token",
+            "event_jwt"
+          ]
+        },
+        "lifetime": {
+          "type": "string",
+          "enum": ["short", "long_lived", "single_use", "session"]
+        },
+        "lifetime_typical": {
+          "type": "string"
+        },
+        "holder_bound": {
+          "type": "boolean"
+        },
+        "holder_bound_optional": {
+          "type": "boolean"
+        },
+        "revocable": {
+          "type": "string",
+          "enum": ["yes", "no", "short_expiry", "short_lifetime", "manual_deletion"]
+        },
+        "requires_user": {
+          "type": "boolean"
+        },
+        "attestation_mechanism": {
+          "type": "string",
+          "enum": [
+            "none",
+            "spire_node",
+            "k8s_api",
+            "github_actions_runtime",
+            "gitlab_ci_runtime",
+            "circleci_runtime",
+            "aws_imds",
+            "gke_metadata_server",
+            "azure_imds",
+            "inherited_from_subject_token",
+            "attenuation_by_holder"
+          ]
+        },
+        "rotation_mechanism": {
+          "type": "string",
+          "enum": [
+            "platform_automatic",
+            "sdk_managed",
+            "manual_refresh",
+            "per_request_proof",
+            "per_job",
+            "re_exchange",
+            "none",
+            "attenuation_by_holder"
+          ]
+        },
+        "security_assurance": {
+          "type": "string",
+          "enum": ["low", "medium", "high", "very_high"]
+        },
+        "use_case": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "frameworks": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^framework:"
+          }
+        },
+        "runtimes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^platform:"
+          }
+        },
+        "wire_format_examples": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["description"],
+            "properties": {
+              "description": { "type": "string" },
+              "request": { "type": "string" },
+              "response": { "type": "string" },
+              "config": { "type": "string" },
+              "url": { "type": "string" },
+              "note": { "type": "string" }
+            }
+          }
+        },
+        "claims": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "required"],
+            "properties": {
+              "name": { "type": "string" },
+              "required": { "type": "boolean" },
+              "description": { "type": "string" }
+            }
+          }
+        },
+        "pattern": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "sts-token-exchange",
+              "workload-attestation",
+              "automatic-credential-rotation",
+              "no-secrets-in-config"
+            ]
+          }
+        },
+        "relationships": {
+          "type": "object",
+          "properties": {
+            "extends": {
+              "type": "array",
+              "items": { "type": "string", "pattern": "^mech:" }
+            },
+            "composes_with": {
+              "type": "array",
+              "items": { "type": "string", "pattern": "^mech:" }
+            },
+            "incompatible_with": {
+              "type": "array",
+              "items": { "type": "string", "pattern": "^mech:" }
+            }
+          }
+        },
+        "compliance_tags": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "deprecation": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": ["active", "deprecated", "sunset"]
+            },
+            "since": { "type": ["string", "null"] },
+            "sunset": { "type": ["string", "null"] },
+            "replacement": { "type": ["string", "null"] }
+          }
+        },
+        "production_readiness": {
+          "type": "string",
+          "enum": ["ga", "experimental", "deprecated", "preview"]
+        },
+        "implementation_complexity": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5,
+          "description": "1 = trivial, 5 = highly complex"
+        },
+        "last_verified": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        },
+        "spec_version": {
+          "type": "string"
+        },
+        "validation_steps": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1
+        },
+        "common_errors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["error", "cause", "fix"],
+            "properties": {
+              "error": { "type": "string" },
+              "cause": { "type": "string" },
+              "fix": { "type": "string" }
+            }
+          }
+        },
+        "anti_patterns": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "scenario": {
+      "type": "object",
+      "required": ["id"],
+      "additionalProperties": true,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^scenario:"
+        },
+        "description": { "type": "string" },
+        "source_runtime": { "type": "string" },
+        "target_type": { "type": "string" },
+        "identity_kind": {
+          "type": "string",
+          "enum": ["machine", "user_delegated", "mixed", "any"]
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["action"],
+            "properties": {
+              "step": {},
+              "mechanism": { "type": "string" },
+              "action": { "type": "string" },
+              "consumes": { "type": "string" },
+              "produces": { "type": "string" },
+              "wire_format": { "type": "string" },
+              "note": { "type": "string" },
+              "url": { "type": "string" },
+              "tool": { "type": "string" },
+              "config": { "type": "string" }
+            }
+          }
+        },
+        "references": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "note": { "type": "string" }
+      }
+    },
+    "glossary_entry": {
+      "type": "object",
+      "required": ["id", "term", "definition"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^term:"
+        },
+        "term": { "type": "string" },
+        "definition": { "type": "string" }
+      }
+    },
+    "decision_rule": {
+      "type": "object",
+      "required": ["id", "if", "then"],
+      "properties": {
+        "id": { "type": "string" },
+        "if": { "type": "object" },
+        "then": { "type": "object" }
+      }
+    },
+    "anti_pattern": {
+      "type": "object",
+      "required": ["id", "name", "severity", "description", "fix"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^threat:"
+        },
+        "name": { "type": "string" },
+        "severity": {
+          "type": "string",
+          "enum": ["critical", "high", "medium", "low"]
+        },
+        "description": { "type": "string" },
+        "detection": { "type": "string" },
+        "fix": { "type": "string" }
+      }
+    }
+  }
+}

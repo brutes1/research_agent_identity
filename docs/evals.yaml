@@ -1,0 +1,550 @@
+# Agentic Identity Reference — Eval Harness
+# 25+ query/answer pairs for CI validation
+# Each eval: query (what an agent might ask), expected_answer (key facts that must appear in answer),
+#             related_ids (mechanism/scenario IDs the answer draws from), difficulty (1-5)
+
+schema_version: "1.0"
+last_verified: "2026-05-07"
+
+evals:
+
+  # ── Scenario recipe queries ──────────────────────────────────────────────────
+
+  - id: eval:001
+    category: scenario
+    difficulty: 3
+    query: "I have a GitHub Actions workflow that needs to call an MCP server. What identity mechanism should I use and what are the exact steps?"
+    expected_answer:
+      mechanism_chain: ["mech:github-actions-oidc", "mech:oauth2.token-exchange", "mech:mcp-oauth21"]
+      key_facts:
+        - "Set permissions: id-token: write in workflow"
+        - "Exchange GHA OIDC token at cloud STS using token-exchange grant"
+        - "Use resulting OAuth 2.1 Bearer token with Authorization: Bearer header at MCP server"
+        - "No stored secrets required"
+    related_ids:
+      - scenario:gha-to-mcp
+      - mech:github-actions-oidc
+      - mech:oauth2.token-exchange
+      - mech:mcp-oauth21
+
+  - id: eval:002
+    category: scenario
+    difficulty: 3
+    query: "My EKS pod needs to call both the Anthropic API and an internal MCP server. How do I handle both credentials?"
+    expected_answer:
+      key_facts:
+        - "Use IRSA or EKS Pod Identity for AWS services"
+        - "For internal MCP server: use SPIFFE X.509-SVID via mTLS (no Authorization header needed)"
+        - "For Anthropic API: rotate API key via AWS Secrets Manager (or use IRSA-exchanged token if supported)"
+        - "Pod can hold two credentials simultaneously"
+    related_ids:
+      - scenario:eks-parallel-creds
+      - mech:aws-irsa
+      - mech:spiffe-x509-svid
+
+  - id: eval:003
+    category: scenario
+    difficulty: 3
+    query: "How can a Kubernetes pod on EKS call a GCP service without storing any credentials?"
+    expected_answer:
+      mechanism_chain: ["mech:k8s-projected-sa-token", "mech:gcp-workload-identity"]
+      key_facts:
+        - "Mount projected service account token with audience matching GCP WIF provider"
+        - "Exchange K8s token at GCP STS using token-exchange grant"
+        - "Result is a GCP access token valid for ~1 hour"
+        - "No GCP service account key file needed"
+    related_ids:
+      - scenario:k8s-to-gcp
+      - mech:k8s-projected-sa-token
+      - mech:gcp-workload-identity
+
+  - id: eval:004
+    category: scenario
+    difficulty: 4
+    query: "An agent needs to delegate to a sub-agent while preserving user context. How does RFC 8693 Token Exchange work for this?"
+    expected_answer:
+      key_facts:
+        - "Use grant_type=urn:ietf:params:oauth:grant-type:token-exchange"
+        - "subject_token is the user's existing token"
+        - "actor_token is the sub-agent's identity token"
+        - "Resulting token has act claim with nested delegation chain"
+        - "Requested scope must be subset of subject_token scope (scope attenuation)"
+        - "act claim structure: { sub: user, act: { sub: sub-agent } }"
+    related_ids:
+      - scenario:delegation-chain
+      - mech:oauth2.token-exchange
+
+  - id: eval:005
+    category: scenario
+    difficulty: 3
+    query: "How do I deploy from GitHub Actions to cloud infrastructure without storing any cloud credentials in GitHub?"
+    expected_answer:
+      key_facts:
+        - "Set permissions: id-token: write in workflow"
+        - "Use google-github-actions/auth or equivalent action"
+        - "Configure Workload Identity Federation on cloud provider with GHA as OIDC issuer"
+        - "Set trust condition to exact repo:org/repo:ref:refs/heads/main (not wildcard)"
+        - "No secrets stored in GitHub"
+    related_ids:
+      - scenario:cicd-no-secrets
+      - mech:github-actions-oidc
+      - mech:gcp-workload-identity
+
+  - id: eval:006
+    category: scenario
+    difficulty: 2
+    query: "My headless agent needs user consent to access a calendar API. There's no browser available. What's the right approach?"
+    expected_answer:
+      key_facts:
+        - "Use Device Authorization Grant (RFC 8628)"
+        - "Agent requests device_code and user_code from AS"
+        - "Agent displays user_code via out-of-band channel (email, Slack, etc.)"
+        - "Agent polls token endpoint until user completes auth on separate device"
+        - "Polling with authorization_pending response is normal"
+    related_ids:
+      - scenario:device-grant
+      - mech:oauth2.device-auth
+
+  - id: eval:007
+    category: scenario
+    difficulty: 4
+    query: "I have a long-running autonomous agent. Partway through a task it needs to delete production records. How should it re-authorize without blocking the user in real time?"
+    expected_answer:
+      key_facts:
+        - "Use CIBA (Client Initiated Backchannel Authentication)"
+        - "Agent submits POST /bc-authorize with binding_message describing the specific action"
+        - "User receives push notification on trusted device with binding_message"
+        - "Agent polls /token endpoint until user approves or denies"
+        - "binding_message must be specific (not generic) to prevent consent fatigue"
+        - "Three delivery modes: poll, ping, push"
+    related_ids:
+      - scenario:ciba-reauth
+      - mech:ciba
+
+  - id: eval:008
+    category: scenario
+    difficulty: 4
+    query: "What's the complete auth flow for a high-value financial transaction using FAPI 2.0?"
+    expected_answer:
+      key_facts:
+        - "PAR (RFC 9126): submit authorization_details via POST to /par first"
+        - "Use authorization_details (RAR, RFC 9396) to express specific payment amount/currency"
+        - "Complete auth code flow with PKCE S256"
+        - "Exchange code for DPoP-bound token"
+        - "Present DPoP proof JWT + mTLS client certificate at API"
+        - "Authorization: DPoP <token> header + DPoP: <proof> header"
+    related_ids:
+      - scenario:fapi2-high-value
+      - mech:fapi2
+      - mech:dpop
+      - mech:oauth2.par
+      - mech:oauth2.rar
+
+  - id: eval:009
+    category: scenario
+    difficulty: 3
+    query: "How can an on-premises agent call AWS services without having AWS credentials stored anywhere?"
+    expected_answer:
+      key_facts:
+        - "Use AWS IAM Roles Anywhere"
+        - "Set up X.509 Trust Anchor with on-prem PKI certificate CA"
+        - "On-prem agent presents X.509 certificate to IAM Roles Anywhere"
+        - "AWS issues temporary IAM credentials"
+        - "Use aws_signing_helper credential-process or SDK integration"
+    related_ids:
+      - scenario:on-prem-to-cloud
+      - mech:aws-iam-roles-anywhere
+
+  - id: eval:010
+    category: scenario
+    difficulty: 3
+    query: "I need to migrate from long-lived API keys to workload identity. What are the steps?"
+    expected_answer:
+      key_facts:
+        - "Step 1: Audit all API keys with git log -S 'API_KEY' --all"
+        - "Step 2: Enable workload identity on compute platform"
+        - "Step 3: Deploy dual-credential (WI first, API key fallback)"
+        - "Step 4: Reduce API key TTL to 7 days"
+        - "Step 5: Remove API key after all workloads confirmed using WI"
+    related_ids:
+      - scenario:api-key-migration
+
+  # ── Mechanism lookup queries ─────────────────────────────────────────────────
+
+  - id: eval:011
+    category: mechanism_lookup
+    difficulty: 2
+    query: "What is DPoP and how does it differ from regular Bearer tokens?"
+    expected_answer:
+      key_facts:
+        - "DPoP = Demonstration of Proof-of-Possession (RFC 9449)"
+        - "Client generates ephemeral key pair; proves possession at each API call"
+        - "Two headers required: Authorization: DPoP <token> AND DPoP: <proof_jwt>"
+        - "Bearer token: possession = authorization; DPoP: must also prove private key ownership"
+        - "DPoP proof is single-use (jti uniqueness required)"
+        - "Proof binds to specific HTTP method (htm) and URI (htu)"
+        - "ath claim binds proof to specific access token"
+    related_ids:
+      - mech:dpop
+
+  - id: eval:012
+    category: mechanism_lookup
+    difficulty: 2
+    query: "What SPIFFE mechanism should I use for HTTP services where I can't use mTLS?"
+    expected_answer:
+      key_facts:
+        - "Use SPIFFE JWT-SVID instead of X.509-SVID"
+        - "JWT-SVID is a signed JWT with SPIFFE ID as sub claim"
+        - "Obtained from SPIRE Workload API (same as X.509)"
+        - "Present as Bearer token in Authorization header"
+        - "Must validate alg against allowlist (RS256, ES256, EdDSA)"
+        - "aud claim must contain the target service identifier"
+    related_ids:
+      - mech:spiffe-jwt-svid
+
+  - id: eval:013
+    category: mechanism_lookup
+    difficulty: 2
+    query: "What is the difference between mech:mtls-client-auth (RFC 8705 §2) and mech:mtls-certificate-bound (RFC 8705 §3)?"
+    expected_answer:
+      key_facts:
+        - "RFC 8705 §2: client authentication AT the authorization server (token endpoint)"
+        - "RFC 8705 §3: token contains cnf.x5t#S256; resource server verifies client still holds key"
+        - "§2 proves who obtained the token; §3 proves who is using the token at the API"
+        - "Both can be combined for end-to-end binding"
+    related_ids:
+      - mech:mtls-client-auth
+      - mech:mtls-certificate-bound
+
+  - id: eval:014
+    category: mechanism_lookup
+    difficulty: 3
+    query: "When should I use Biscuits or Macaroons instead of RFC 8693 Token Exchange for agent delegation?"
+    expected_answer:
+      key_facts:
+        - "Use capability tokens (Biscuits/Macaroons) when delegation chain is deep and latency is critical"
+        - "RFC 8693 requires a round-trip to STS per hop; Biscuits attenuate offline"
+        - "Suitable for sub-100ms delegation chains in high-velocity agent networks"
+        - "Trade-off: no revocation mechanism (offline nature)"
+        - "Compensate with very short token lifetimes"
+        - "No standard integration with OAuth; niche adoption"
+    related_ids:
+      - mech:capability-tokens
+      - mech:oauth2.token-exchange
+
+  - id: eval:015
+    category: mechanism_lookup
+    difficulty: 2
+    query: "What are the required fields in a private_key_jwt client assertion for OAuth 2.0?"
+    expected_answer:
+      key_facts:
+        - "iss = client_id"
+        - "sub = client_id"
+        - "aud = token endpoint URL (exact)"
+        - "jti = unique per request (prevent replay)"
+        - "exp = at most 300 seconds from iat"
+        - "client_assertion_type = urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
+    related_ids:
+      - mech:oauth2.client-credentials
+
+  - id: eval:016
+    category: mechanism_lookup
+    difficulty: 2
+    query: "What is OIDC-A and what new claims does it add to ID tokens?"
+    expected_answer:
+      key_facts:
+        - "OIDC-A = OpenID Connect for Agents (proposed extension, not yet standardized)"
+        - "Adds agent_model, agent_provider, agent_version claims"
+        - "Capability assertions about what the agent is authorized to do"
+        - "Status: proposal from OpenID Foundation AI CG"
+        - "Proprietary precursors: Azure idtyp:agent, AWS Bedrock AgentCore"
+    related_ids:
+      - mech:oidc-a
+
+  - id: eval:017
+    category: mechanism_lookup
+    difficulty: 2
+    query: "What is the difference between agent de-provisioning and credential revocation?"
+    expected_answer:
+      key_facts:
+        - "Revocation: invalidates current credential; identity registration persists; agent can get new credentials"
+        - "De-provisioning: permanent complete removal from all ACLs, databases, and systems"
+        - "Response to compromise: de-provision (not just revoke)"
+        - "SCIM DELETE triggers de-provisioning"
+        - "SSF (Shared Signals Framework) propagates de-provisioning events cross-domain"
+    related_ids:
+      - mech:scim-agent
+      - mech:ssf
+
+  # ── Security anti-pattern queries ────────────────────────────────────────────
+
+  - id: eval:018
+    category: security
+    difficulty: 2
+    query: "My JWT validation code reads the alg from the token header and uses it to verify. What's wrong with this?"
+    expected_answer:
+      key_facts:
+        - "AP-2: RS256/HS256 Algorithm Confusion attack"
+        - "Attacker takes RSA public key (public), signs token with HS256 using public key as HMAC secret"
+        - "Server uses public key for HS256 verification — succeeds"
+        - "Fix: hard-code expected algorithm; never derive from token header"
+        - "Also risk of AP-1 (alg:none) if none is in the accepted list"
+    related_ids:
+      - threat:alg-confusion
+      - threat:alg-none
+
+  - id: eval:019
+    category: security
+    difficulty: 2
+    query: "My CI/CD GitHub Actions trust policy uses StringLike with repo:myorg/*. Is this a security risk?"
+    expected_answer:
+      key_facts:
+        - "Yes — AP-7: Wildcard CI/CD sub conditions"
+        - "Any repository in the organization can assume this cloud role"
+        - "Risk: compromised or malicious repo in org gets production cloud access"
+        - "Fix: StringEquals with fully qualified repo:myorg/myrepo:ref:refs/heads/main"
+        - "Also add aud condition matching cloud STS"
+    related_ids:
+      - threat:wildcard-cicd-sub
+
+  - id: eval:020
+    category: security
+    difficulty: 3
+    query: "My agent fetches URLs from user input and uses the content. What SSRF risk is there related to cloud credentials?"
+    expected_answer:
+      key_facts:
+        - "IMDSv1 SSRF attack: agent directed to http://169.254.169.254/ steals instance IAM credentials"
+        - "Also: MCP resource_metadata SSRF — malicious MCP server points 401 challenge at attacker-controlled URL"
+        - "Mitigations: enforce IMDSv2 (session token + hop-limit=1); block 169.254.169.254 in URL-fetch tool"
+        - "For MCP: validate discovered issuer against pre-configured allowlist"
+    related_ids:
+      - mech:aws-lambda-execution-role
+      - mech:mcp-oauth21
+      - threat:jku-header
+
+  - id: eval:021
+    category: security
+    difficulty: 2
+    query: "My service validates the aud claim using a substring check. Is this sufficient?"
+    expected_answer:
+      key_facts:
+        - "No — AP-4: Wildcard aud validation"
+        - "Substring match allows https://api.example.com to be accepted by attacker at https://api.example.com.evil.com"
+        - "Fix: exact string match for every aud value"
+        - "If aud is array: at least one value must exactly equal this service's identifier"
+    related_ids:
+      - threat:wildcard-aud
+
+  - id: eval:022
+    category: security
+    difficulty: 3
+    query: "I'm using PKCE with code_challenge_method=plain. Why is this insecure?"
+    expected_answer:
+      key_facts:
+        - "AP-3: PKCE plain method"
+        - "With plain: code_challenge == code_verifier"
+        - "code_challenge is in the authorization redirect URL (observable by proxies, logs, referrer headers)"
+        - "Attacker who observed the URL can extract verifier and exchange the code"
+        - "Fix: always use S256; servers must reject plain"
+    related_ids:
+      - threat:pkce-plain
+
+  # ── Framework and platform queries ──────────────────────────────────────────
+
+  - id: eval:023
+    category: framework
+    difficulty: 2
+    query: "Which AI agent frameworks handle OAuth token refresh automatically, and which require manual implementation?"
+    expected_answer:
+      key_facts:
+        - "Automatic: AutoGen/MAF (Azure Identity SDK), Semantic Kernel (Azure Identity), Google ADK, AWS Bedrock AgentCore (Token Vault), Azure AI Foundry (Managed Identity), Vertex AI (google-auth)"
+        - "Manual: LangGraph, CrewAI"
+        - "N/A (long-lived keys only): LlamaIndex, Haystack — flag as anti-pattern for production"
+    related_ids:
+      - framework:langgraph
+      - framework:autogen
+      - framework:crewai
+      - framework:semantic-kernel
+      - framework:llamaindex
+      - framework:haystack
+
+  - id: eval:024
+    category: framework
+    difficulty: 2
+    query: "What authentication schemes does Google ADK support?"
+    expected_answer:
+      key_facts:
+        - "API_KEY (static keys, avoid in prod)"
+        - "OAUTH2 (2LO machine-to-machine or 3LO user-delegated)"
+        - "SERVICE_ACCOUNT (JSON key file, avoid — use WI instead)"
+        - "OPEN_ID_CONNECT"
+        - "3LO: pause-and-resume when user consent needed"
+        - "Token refresh: Yes-SDK (ADK manages automatically)"
+    related_ids:
+      - platform:google-adk
+
+  - id: eval:025
+    category: mechanism_lookup
+    difficulty: 3
+    query: "What Kubernetes service account token type is deprecated and what should I use instead?"
+    expected_answer:
+      key_facts:
+        - "Legacy auto-mounted SA tokens are deprecated (since Kubernetes 1.24)"
+        - "Problems: long-lived, no audience binding, auto-mounted (even when not needed)"
+        - "Fix: use projected service account tokens"
+        - "Projected tokens: 1-hour lifetime, audience-bound, auto-rotated by kubelet"
+        - "Set automountServiceAccountToken: false and configure projected volumes explicitly"
+    related_ids:
+      - mech:k8s-legacy-sa-token
+      - mech:k8s-projected-sa-token
+
+  # ── JWT validation queries ────────────────────────────────────────────────────
+
+  - id: eval:026
+    category: jwt_validation
+    difficulty: 3
+    query: "What is the complete sequence for validating a JWT according to RFC 7519?"
+    expected_answer:
+      key_facts:
+        - "Step 1: Verify alg header against explicit allowlist (reject none unconditionally)"
+        - "Step 2: Verify signature using pre-configured JWKS endpoint (never jku/x5u from token)"
+        - "Step 3: Verify iss exact match"
+        - "Step 4: Verify aud contains this service identifier (exact match)"
+        - "Step 5: Verify exp with clock skew <= 60s"
+        - "Step 6: Verify nbf if present"
+        - "Step 7: Verify iat if present"
+        - "Step 8: Verify jti replay check for DPoP proofs and high-assurance tokens"
+        - "Step 9: Verify custom claims (scope, agent claims, delegation chain)"
+    related_ids:
+      - threat:alg-none
+      - threat:alg-confusion
+      - threat:jku-header
+      - threat:wildcard-aud
+
+  - id: eval:027
+    category: jwt_validation
+    difficulty: 2
+    query: "My service gets a 401 with WWW-Authenticate: DPoP error=use_dpop_nonce. What do I do?"
+    expected_answer:
+      key_facts:
+        - "Server requires a DPoP nonce in the proof JWT"
+        - "Read the DPoP-Nonce header value from the 401 response"
+        - "Include nonce claim in the next DPoP proof JWT"
+        - "Retry the request with new DPoP proof containing the nonce"
+        - "Nonce is single-use; get a new one for each retry"
+    related_ids:
+      - mech:dpop
+
+  - id: eval:028
+    category: security
+    difficulty: 3
+    query: "I have a service that receives a token and then calls another downstream service. Should I just forward the same token?"
+    expected_answer:
+      key_facts:
+        - "No — AP-8: Token forwarding without audience re-validation"
+        - "The token's aud claim binds it to the first service; downstream service should reject it"
+        - "If downstream accepts it: confused deputy vulnerability"
+        - "Fix: use RFC 8693 Token Exchange to obtain a new token with aud matching downstream service"
+        - "token-exchange endpoint: grant_type=urn:ietf:params:oauth:grant-type:token-exchange"
+    related_ids:
+      - threat:token-forwarding
+      - mech:oauth2.token-exchange
+
+  - id: eval:029
+    category: emerging_standards
+    difficulty: 3
+    query: "What IETF drafts are most relevant for multi-agent workload identity in 2026?"
+    expected_answer:
+      key_facts:
+        - "draft-ietf-wimse-arch-07: multi-system workload identity architecture (expires Sep 2026)"
+        - "draft-klrc-aiagent-auth-00 (AIMS): WIMSE + SPIFFE + OAuth composite framework (Mar 2026)"
+        - "draft-rosenberg-oauth-aauth-00: Agentic Authorization OAuth 2.1 extension"
+        - "draft-oauth-ai-agents-on-behalf-of-user-02: requested_actor/actor_token params"
+        - "draft-ietf-oauth-identity-assertion-authz-grant-01: identity assertion grant"
+        - "RFC 9700 (Final Jan 2025): OAuth 2.0 security BCP; refresh token rotation mandatory"
+    related_ids: []
+
+  - id: eval:030
+    category: mechanism_lookup
+    difficulty: 2
+    query: "What HTTP headers are required for an AWS IMDS request and why?"
+    expected_answer:
+      key_facts:
+        - "IMDSv2 requires: PUT to http://169.254.169.254/latest/api/token with X-aws-ec2-metadata-token-ttl-seconds header first"
+        - "Then GET metadata with X-aws-ec2-metadata-token: <token> header"
+        - "IMDSv1 (no token header) is vulnerable to SSRF attacks"
+        - "Enforce IMDSv2 via http-tokens=required in instance metadata options"
+        - "hop-limit=1 prevents SSRF through internal proxies"
+    related_ids:
+      - mech:aws-lambda-execution-role
+
+  - id: eval:031
+    category: mechanism_lookup
+    difficulty: 3
+    query: "What does the act claim look like after a 3-hop delegation chain from User → Agent A → Agent B → Agent C?"
+    expected_answer:
+      key_facts:
+        - "Nested act objects represent the full chain"
+        - "sub is always the original delegating user"
+        - "Structure: { sub: user, act: { sub: agent-c, act: { sub: agent-b, act: { sub: agent-a } } } }"
+        - "Each hop must perform RFC 8693 token exchange"
+        - "Scope narrows at each hop (attenuation)"
+        - "Recommend max 3-hop depth in policy"
+    related_ids:
+      - mech:oauth2.token-exchange
+      - scenario:three-hop-attenuation
+
+  - id: eval:032
+    category: security
+    difficulty: 2
+    query: "What is the IMDSv1 SSRF attack and how does it affect AI agents?"
+    expected_answer:
+      key_facts:
+        - "Cloud VMs expose http://169.254.169.254/ to provide instance metadata including IAM credentials"
+        - "An agent with a URL-fetch tool can be directed to that endpoint to steal cloud credentials"
+        - "IMDSv1 requires no authentication — any HTTP request can retrieve credentials"
+        - "Mitigations: enforce IMDSv2 (session token required); set hop-limit=1; block 169.254.169.254 in tool"
+    related_ids:
+      - mech:aws-lambda-execution-role
+
+  - id: eval:033
+    category: mechanism_lookup
+    difficulty: 2
+    query: "What changed in GitHub Actions OIDC sub format in April 2026?"
+    expected_answer:
+      key_facts:
+        - "GitHub Actions OIDC sub format switched to use immutable numeric IDs instead of human-readable names"
+        - "This affects trust policy conditions that match on sub claim"
+        - "Existing trust policies using string repo names may need to be updated"
+        - "Purpose: prevent sub claim spoofing via org/repo renaming"
+    related_ids:
+      - mech:github-actions-oidc
+
+  - id: eval:034
+    category: mechanism_lookup
+    difficulty: 2
+    query: "How does the token caching TTL formula work for OAuth access tokens?"
+    expected_answer:
+      key_facts:
+        - "Cache TTL = min(60s, (exp - now) * 0.5)"
+        - "Proactive refresh at 80% of token lifetime (e.g., 48 minutes for 60-minute token)"
+        - "Cache key = hash(client_id + scope + resource + audience)"
+        - "Do NOT cache SPIFFE SVIDs or projected SA tokens at app layer (files are the cache)"
+        - "Do NOT cache DPoP proofs (single-use)"
+        - "Negative cache (revoked/invalid): 5-10 seconds max"
+    related_ids: []
+
+  - id: eval:035
+    category: mechanism_lookup
+    difficulty: 3
+    query: "What is the A2A AgentCard and what is its key security limitation?"
+    expected_answer:
+      key_facts:
+        - "AgentCard is a JSON document at /.well-known/agent.json describing agent capabilities and auth schemes"
+        - "Used in Google A2A protocol for agent discovery"
+        - "Key security limitation: no revocation mechanism defined in current spec"
+        - "A compromised agent's card cannot be invalidated before TTL"
+        - "Mitigation: treat cards as short-lived (max 1-hour cache); re-fetch on each session"
+        - "Also: no standardized trust bootstrap for first contact"
+    related_ids:
+      - mech:a2a-jws

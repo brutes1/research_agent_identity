@@ -1,0 +1,1511 @@
+schema_version: "2.0"
+data_version: "1.0.0"
+last_verified: "2026-05-07"
+description: "Authoritative machine-readable companion to agentic-identity-reference.md. YAML is the source of truth; Markdown tables are derived from this file."
+
+id_registry:
+  - id: mech:oauth2.client-credentials
+    status: active
+  - id: mech:oauth2.token-exchange
+    status: active
+  - id: mech:oauth2.auth-code-pkce
+    status: active
+  - id: mech:oauth2.device-auth
+    status: active
+  - id: mech:oauth2.rar
+    status: active
+  - id: mech:oauth2.par
+    status: active
+  - id: mech:oauth2.introspection
+    status: active
+  - id: mech:oidc-wif
+    status: active
+  - id: mech:oidc-a
+    status: active
+  - id: mech:openid-federation
+    status: active
+  - id: mech:spiffe-id
+    status: active
+  - id: mech:spiffe-x509-svid
+    status: active
+  - id: mech:spiffe-jwt-svid
+    status: active
+  - id: mech:spiffe-oidc-federation
+    status: active
+  - id: mech:mtls-client-auth
+    status: active
+  - id: mech:mtls-certificate-bound
+    status: active
+  - id: mech:dpop
+    status: active
+  - id: mech:capability-tokens
+    status: active
+  - id: mech:aws-irsa
+    status: active
+  - id: mech:aws-eks-pod-identity
+    status: active
+  - id: mech:aws-lambda-execution-role
+    status: active
+  - id: mech:aws-iam-roles-anywhere
+    status: active
+  - id: mech:gcp-workload-identity
+    status: active
+  - id: mech:azure-managed-identity
+    status: active
+  - id: mech:k8s-legacy-sa-token
+    status: deprecated
+  - id: mech:k8s-projected-sa-token
+    status: active
+  - id: mech:github-actions-oidc
+    status: active
+  - id: mech:gitlab-ci-oidc
+    status: active
+  - id: mech:circleci-oidc
+    status: active
+  - id: mech:mcp-oauth21
+    status: active
+  - id: mech:a2a-jws
+    status: active
+  - id: mech:ciba
+    status: active
+  - id: mech:scim-agent
+    status: experimental
+  - id: mech:ssf
+    status: active
+  - id: mech:fapi2
+    status: active
+
+mechanisms:
+
+  - id: mech:oauth2.client-credentials
+    name: "OAuth 2.0 Client Credentials"
+    aliases: ["client_credentials", "CC grant"]
+    status: stable
+    rfc: "RFC 6749 §4.4; OAuth 2.1 draft-15"
+    token_type: jwt_or_opaque
+    lifetime: short
+    lifetime_typical: "3600s"
+    holder_bound: false
+    holder_bound_optional: true
+    revocable: short_expiry
+    requires_user: false
+    attestation_mechanism: none
+    rotation_mechanism: manual_refresh
+    security_assurance: medium
+    use_case:
+      - m2m
+      - backend_agents
+      - scheduled_agents
+    frameworks:
+      - framework:langgraph
+      - framework:crewai
+      - framework:llamaindex
+      - framework:haystack
+      - framework:openai-agents
+      - framework:google-adk
+      - framework:bedrock-agentcore
+      - framework:vertex-ai
+    runtimes:
+      - platform:kubernetes
+      - platform:lambda
+      - platform:cloud-run
+      - platform:container-apps
+      - platform:bare-metal
+    wire_format_examples:
+      - description: "Token endpoint request with client_secret_basic"
+        request: |
+          POST /token HTTP/1.1
+          Authorization: Basic base64(client_id:client_secret)
+          Content-Type: application/x-www-form-urlencoded
+
+          grant_type=client_credentials&scope=read:data
+      - description: "Token endpoint request with private_key_jwt (recommended)"
+        request: |
+          POST /token HTTP/1.1
+          Content-Type: application/x-www-form-urlencoded
+
+          grant_type=client_credentials
+          &client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer
+          &client_assertion=<jwt_signed_with_private_key>
+          &scope=read:data
+      - description: "Token response"
+        response: |
+          HTTP/1.1 200 OK
+          Content-Type: application/json
+
+          {"access_token":"eyJ...","token_type":"Bearer","expires_in":3600}
+      - description: "API call with token"
+        request: |
+          GET /resource HTTP/1.1
+          Authorization: Bearer eyJ...
+    claims:
+      - name: sub
+        required: true
+        description: "Client identifier (client_id)"
+      - name: iss
+        required: true
+        description: "Authorization server identifier"
+      - name: aud
+        required: true
+        description: "Resource server identifier(s)"
+      - name: exp
+        required: true
+        description: "Expiration time"
+      - name: iat
+        required: true
+        description: "Issued at time"
+      - name: scope
+        required: false
+        description: "Granted scope (may be scp as array)"
+      - name: jti
+        required: false
+        description: "JWT ID (required for private_key_jwt client assertion)"
+    pattern:
+      - sts-token-exchange
+    relationships:
+      extends: []
+      composes_with:
+        - mech:dpop
+        - mech:mtls-certificate-bound
+        - mech:oauth2.par
+        - mech:oauth2.rar
+      incompatible_with:
+        - mech:oauth2.device-auth
+    compliance_tags:
+      - fips-140-2-compatible
+      - fedramp-moderate
+      - pci-dss-applicable
+    deprecation:
+      status: active
+      since: null
+      sunset: null
+      replacement: null
+    production_readiness: ga
+    implementation_complexity: 2
+    last_verified: "2026-05-07"
+    spec_version: "RFC 6749 + OAuth 2.1 draft-15"
+    validation_steps:
+      - "Verify alg header against allowlist (reject none)"
+      - "Verify signature using pre-configured issuer JWKS endpoint"
+      - "Verify iss exact match"
+      - "Verify aud contains this service identifier (exact match)"
+      - "Verify exp with clock skew <= 60s"
+      - "Verify scope contains required permission"
+    common_errors:
+      - error: invalid_client
+        cause: "Wrong client_id or authentication failure"
+        fix: "Check client_id; verify JWT iss=sub=client_id for private_key_jwt"
+      - error: invalid_scope
+        cause: "Requested scope not registered on client"
+        fix: "Register scope on client; check scope spelling"
+      - error: unauthorized_client
+        cause: "Client not authorized for client_credentials grant"
+        fix: "Enable grant type on client registration"
+    anti_patterns:
+      - "AP-6: Storing client_secret in env var without rotation"
+      - "AP-4: Using prefix match for aud validation at resource server"
+
+  - id: mech:oauth2.token-exchange
+    name: "OAuth 2.0 Token Exchange"
+    aliases: ["RFC 8693", "token exchange", "STS exchange"]
+    status: stable
+    rfc: "RFC 8693"
+    token_type: jwt
+    lifetime: short
+    lifetime_typical: "3600s (STS-configured)"
+    holder_bound: false
+    holder_bound_optional: true
+    revocable: short_expiry
+    requires_user: false
+    attestation_mechanism: inherited_from_subject_token
+    rotation_mechanism: re_exchange
+    security_assurance: medium
+    use_case:
+      - m2m_delegation
+      - user_delegation
+      - cross_cloud
+      - cicd
+    frameworks:
+      - framework:langgraph
+      - framework:autogen
+      - framework:semantic-kernel
+    runtimes:
+      - platform:kubernetes
+      - platform:lambda
+      - platform:cloud-run
+      - platform:github-actions
+      - platform:gitlab-ci
+    wire_format_examples:
+      - description: "Token exchange request"
+        request: |
+          POST /token HTTP/1.1
+          Content-Type: application/x-www-form-urlencoded
+
+          grant_type=urn:ietf:params:oauth:grant-type:token-exchange
+          &subject_token=<user_access_token>
+          &subject_token_type=urn:ietf:params:oauth:token-type:access_token
+          &actor_token=<agent_id_token>
+          &actor_token_type=urn:ietf:params:oauth:token-type:id_token
+          &resource=https://api.example.com
+          &scope=read:documents
+      - description: "Resulting token with act claim"
+        response: |
+          {
+            "sub": "user@example.com",
+            "act": { "sub": "agent-b", "act": { "sub": "agent-a" } },
+            "scope": "read:documents",
+            "aud": "https://api.example.com"
+          }
+    claims:
+      - name: sub
+        required: true
+        description: "Original subject (user or workload)"
+      - name: act
+        required: false
+        description: "Delegation chain; nested act objects identify each actor"
+      - name: aud
+        required: true
+        description: "Target resource server"
+      - name: scope
+        required: false
+        description: "Granted scope (subset of subject_token scope)"
+    pattern:
+      - sts-token-exchange
+    relationships:
+      extends:
+        - mech:oauth2.client-credentials
+      composes_with:
+        - mech:github-actions-oidc
+        - mech:k8s-projected-sa-token
+        - mech:spiffe-jwt-svid
+        - mech:gcp-workload-identity
+        - mech:aws-irsa
+    production_readiness: ga
+    implementation_complexity: 3
+    last_verified: "2026-05-07"
+    spec_version: "RFC 8693"
+    validation_steps:
+      - "All standard JWT validation steps"
+      - "Verify act chain depth does not exceed policy limit (recommend max 3)"
+      - "Verify no circular references in act chain"
+      - "Verify scope is subset of subject_token scope"
+      - "Verify aud matches this service (do not accept forwarded tokens)"
+    common_errors:
+      - error: invalid_request
+        cause: "Requested scope exceeds subject_token scope"
+        fix: "Narrow requested scope"
+      - error: invalid_token
+        cause: "Subject token expired"
+        fix: "Refresh subject_token before exchange"
+    anti_patterns:
+      - "AP-8: Forwarding subject_token directly to downstream without exchange"
+
+  - id: mech:dpop
+    name: "DPoP (Demonstration of Proof-of-Possession)"
+    aliases: ["RFC 9449", "DPoP binding"]
+    status: stable
+    rfc: "RFC 9449"
+    token_type: dpop_bound_jwt
+    lifetime: short
+    lifetime_typical: "3600s (token); single_use (proof)"
+    holder_bound: true
+    revocable: short_expiry
+    requires_user: false
+    attestation_mechanism: none
+    rotation_mechanism: per_request_proof
+    security_assurance: high
+    use_case:
+      - m2m
+      - user_delegated
+      - high_assurance
+      - financial_grade
+    frameworks:
+      - framework:autogen
+      - framework:semantic-kernel
+    runtimes:
+      - platform:kubernetes
+      - platform:cloud-run
+      - platform:lambda
+      - platform:bare-metal
+    wire_format_examples:
+      - description: "Token request with DPoP proof"
+        request: |
+          POST /token HTTP/1.1
+          DPoP: eyJhbGciOiJFUzI1NiIsInR5cCI6ImRwb3Arand0IiwiandrIjp7Imt0eSI6IkVDIiwiY3J2IjoiUC0yNTYiLCJ4IjoiLi4uIiwieSI6Ii4uLiJ9fQ.eyJqdGkiOiJ1bmlxdWUtaWQiLCJodG0iOiJQT1NUIiwiaHR1IjoiaHR0cHM6Ly9hcy5leGFtcGxlLmNvbS90b2tlbiIsImlhdCI6MTIzNDU2Nzg5MH0.<sig>
+          Content-Type: application/x-www-form-urlencoded
+
+          grant_type=client_credentials&...
+      - description: "API call with DPoP-bound token"
+        request: |
+          GET /resource HTTP/1.1
+          Authorization: DPoP eyJ...access_token...
+          DPoP: eyJ...fresh_proof_jwt...
+    claims:
+      - name: jti
+        required: true
+        description: "Unique proof identifier; must not be replayed within replay window"
+      - name: htm
+        required: true
+        description: "HTTP method of the request"
+      - name: htu
+        required: true
+        description: "HTTP URI (without query or fragment)"
+      - name: iat
+        required: true
+        description: "Proof issuance time"
+      - name: ath
+        required: true
+        description: "Base64URL(SHA256(access_token)) — binds proof to specific token"
+      - name: nonce
+        required: false
+        description: "Server-issued nonce (required when server challenges with DPoP-Nonce)"
+    pattern: []
+    relationships:
+      composes_with:
+        - mech:oauth2.client-credentials
+        - mech:oauth2.auth-code-pkce
+        - mech:fapi2
+    compliance_tags:
+      - fapi-2-required
+      - high-assurance
+    production_readiness: ga
+    implementation_complexity: 3
+    last_verified: "2026-05-07"
+    spec_version: "RFC 9449"
+    validation_steps:
+      - "Verify typ is dpop+jwt"
+      - "Verify alg is not none and is in allowlist"
+      - "Verify signature using jwk from DPoP proof header"
+      - "Verify public key jwk matches cnf.jkt in access token"
+      - "Verify htm matches HTTP method"
+      - "Verify htu matches HTTP URI (no query/fragment)"
+      - "Verify ath = BASE64URL(SHA256(access_token))"
+      - "Verify jti not replayed within replay window (60s recommended)"
+      - "Verify iat within clock skew (60s)"
+      - "If DPoP-Nonce challenge issued: verify nonce claim"
+    common_errors:
+      - error: use_dpop_nonce
+        cause: "Server requires DPoP nonce"
+        fix: "Retry with nonce from DPoP-Nonce response header in proof"
+      - error: invalid_dpop_proof
+        cause: "htu mismatch, htm wrong, ath mismatch, or jti replayed"
+        fix: "Check htu matches exact URI; verify ath = BASE64URL(SHA256(token))"
+    anti_patterns: []
+
+  - id: mech:spiffe-x509-svid
+    name: "SPIFFE X.509-SVID"
+    aliases: ["X.509-SVID", "SPIFFE mTLS certificate"]
+    status: stable
+    rfc: "SPIFFE SVID specification"
+    token_type: x509_certificate
+    lifetime: short
+    lifetime_typical: "3600s (SPIRE default)"
+    holder_bound: true
+    revocable: short_lifetime
+    requires_user: false
+    attestation_mechanism: spire_node
+    rotation_mechanism: platform_automatic
+    security_assurance: very_high
+    use_case:
+      - workload_identity
+      - m2m
+      - service_mesh
+    frameworks:
+      - framework:envoy
+      - framework:istio
+      - framework:linkerd
+    runtimes:
+      - platform:kubernetes
+      - platform:nomad
+      - platform:eks
+      - platform:gke
+    wire_format_examples:
+      - description: "mTLS connection — no Authorization header; identity in TLS client certificate SAN"
+        request: |
+          # Client presents X.509 certificate at TLS handshake
+          # Server reads: certificate.SubjectAltName.URI = "spiffe://cluster.local/ns/app/sa/agent"
+    claims:
+      - name: SAN URI
+        required: true
+        description: "SPIFFE ID in X.509 Subject Alternative Name URI field"
+    pattern:
+      - workload-attestation
+      - automatic-credential-rotation
+    relationships:
+      composes_with:
+        - mech:spiffe-oidc-federation
+    production_readiness: ga
+    implementation_complexity: 4
+    last_verified: "2026-05-07"
+    spec_version: "SPIFFE SVID spec v1.0"
+    validation_steps:
+      - "Verify certificate signed by trusted CA from trust bundle"
+      - "Verify certificate is not expired"
+      - "Extract SPIFFE ID from SAN URI field"
+      - "Apply workload authorization policy based on SPIFFE ID path"
+    common_errors:
+      - error: certificate_unknown
+        cause: "Client cert not signed by trusted SPIRE CA"
+        fix: "Verify SPIRE federation is configured correctly; check trust bundle"
+    anti_patterns:
+      - "Using SPIFFE across org boundaries without federation"
+
+  - id: mech:spiffe-jwt-svid
+    name: "SPIFFE JWT-SVID"
+    aliases: ["JWT-SVID"]
+    status: stable
+    rfc: "SPIFFE JWT-SVID specification"
+    token_type: jwt
+    lifetime: short
+    lifetime_typical: "3600s (configurable as low as 60s)"
+    holder_bound: false
+    revocable: short_expiry
+    requires_user: false
+    attestation_mechanism: spire_node
+    rotation_mechanism: platform_automatic
+    security_assurance: high
+    use_case:
+      - workload_identity
+      - m2m
+      - http_services
+    runtimes:
+      - platform:kubernetes
+      - platform:nomad
+    wire_format_examples:
+      - description: "JWT-SVID as Bearer token"
+        request: |
+          GET /resource HTTP/1.1
+          Authorization: Bearer eyJ...jwt_svid...
+    claims:
+      - name: sub
+        required: true
+        description: "SPIFFE ID (spiffe://trust-domain/path)"
+      - name: aud
+        required: true
+        description: "Target service URI"
+      - name: exp
+        required: true
+        description: "Expiration"
+    production_readiness: ga
+    implementation_complexity: 3
+    last_verified: "2026-05-07"
+    validation_steps:
+      - "Verify alg against allowlist (RS256, ES256, EdDSA)"
+      - "Fetch JWKS from SPIRE OIDC Discovery endpoint"
+      - "Verify signature"
+      - "Verify sub starts with spiffe://expected-trust-domain/"
+      - "Verify aud contains this service identifier"
+      - "Verify exp"
+    anti_patterns:
+      - "AP-2: RS256/HS256 confusion — specify algorithm explicitly"
+
+  - id: mech:k8s-projected-sa-token
+    name: "Kubernetes Projected Service Account Token"
+    aliases: ["projected SA token", "TokenRequest token"]
+    status: stable
+    rfc: "Kubernetes TokenRequest API"
+    token_type: jwt
+    lifetime: short
+    lifetime_typical: "3600s (default)"
+    holder_bound: false
+    revocable: short_expiry
+    requires_user: false
+    attestation_mechanism: k8s_api
+    rotation_mechanism: platform_automatic
+    security_assurance: medium
+    use_case:
+      - workload_identity
+      - k8s_to_cloud
+    runtimes:
+      - platform:kubernetes
+      - platform:eks
+      - platform:gke
+      - platform:aks
+    wire_format_examples:
+      - description: "Projected volume mount in pod spec"
+        config: |
+          volumes:
+            - name: token
+              projected:
+                sources:
+                  - serviceAccountToken:
+                      audience: sts.amazonaws.com
+                      expirationSeconds: 3600
+                      path: token
+    claims:
+      - name: sub
+        required: true
+        description: "system:serviceaccount:namespace:name"
+      - name: iss
+        required: true
+        description: "Cluster OIDC issuer URL"
+      - name: aud
+        required: true
+        description: "Configured audience (cloud STS)"
+      - name: kubernetes.io
+        required: false
+        description: "Kubernetes-specific block with namespace, pod, serviceaccount metadata"
+    pattern:
+      - workload-attestation
+      - automatic-credential-rotation
+    relationships:
+      composes_with:
+        - mech:aws-irsa
+        - mech:gcp-workload-identity
+        - mech:azure-managed-identity
+    production_readiness: ga
+    implementation_complexity: 2
+    last_verified: "2026-05-07"
+    validation_steps:
+      - "Verify alg against allowlist"
+      - "Verify signature using cluster OIDC JWKS endpoint"
+      - "Verify iss matches cluster OIDC issuer"
+      - "Verify aud matches expected audience"
+      - "Verify exp"
+      - "Verify kubernetes.io.namespace if relevant to policy"
+    common_errors:
+      - error: TokenReviewStatus false
+        cause: "Audience mismatch between projected token and API server"
+        fix: "Set expirationSeconds and audience in projected volume; match aud claim"
+    anti_patterns:
+      - "mech:k8s-legacy-sa-token: auto-mounted long-lived token"
+
+  - id: mech:k8s-legacy-sa-token
+    name: "Kubernetes Legacy Service Account Token"
+    aliases: ["auto-mounted SA token", "long-lived SA token"]
+    status: deprecated
+    rfc: null
+    token_type: jwt
+    lifetime: long_lived
+    holder_bound: false
+    revocable: manual_deletion
+    requires_user: false
+    security_assurance: low
+    use_case: []
+    deprecation:
+      status: deprecated
+      since: "Kubernetes 1.24"
+      sunset: null
+      replacement: "mech:k8s-projected-sa-token"
+    production_readiness: deprecated
+    implementation_complexity: 1
+    last_verified: "2026-05-07"
+    anti_patterns:
+      - "AP-6: Long-lived credential with no audience binding"
+
+  - id: mech:github-actions-oidc
+    name: "GitHub Actions OIDC"
+    aliases: ["GHA OIDC", "Actions OIDC token"]
+    status: stable
+    rfc: "GitHub Actions OIDC documentation"
+    token_type: jwt
+    lifetime: short
+    lifetime_typical: "~600s"
+    holder_bound: false
+    revocable: short_expiry
+    requires_user: false
+    attestation_mechanism: github_actions_runtime
+    rotation_mechanism: per_job
+    security_assurance: medium
+    use_case:
+      - cicd_identity
+      - cloud_deployment
+      - no_stored_secrets
+    runtimes:
+      - platform:github-actions
+    wire_format_examples:
+      - description: "Workflow permission and token request"
+        config: |
+          permissions:
+            id-token: write
+          steps:
+            - uses: google-github-actions/auth@v2
+              with:
+                workload_identity_provider: projects/123/.../providers/gha
+    claims:
+      - name: sub
+        required: true
+        description: "repo:org/repo:ref:refs/heads/main (immutable numeric ID format from 2026-04)"
+      - name: iss
+        required: true
+        description: "https://token.actions.githubusercontent.com"
+      - name: aud
+        required: true
+        description: "Configurable; set to cloud STS audience"
+      - name: repository
+        required: true
+        description: "org/repo"
+      - name: ref
+        required: true
+        description: "refs/heads/main"
+      - name: sha
+        required: true
+        description: "Commit SHA"
+      - name: workflow
+        required: true
+        description: "Workflow filename"
+      - name: job_workflow_ref
+        required: false
+        description: "Reusable workflow identity (org/repo/.github/workflows/deploy.yml@ref)"
+      - name: check_run_id
+        required: false
+        description: "Added 2025-11"
+    pattern:
+      - sts-token-exchange
+    relationships:
+      composes_with:
+        - mech:oauth2.token-exchange
+        - mech:gcp-workload-identity
+        - mech:aws-irsa
+        - mech:azure-managed-identity
+    production_readiness: ga
+    implementation_complexity: 2
+    last_verified: "2026-05-07"
+    validation_steps:
+      - "Verify iss == https://token.actions.githubusercontent.com"
+      - "Verify signature using GHA JWKS endpoint"
+      - "Verify aud matches cloud STS"
+      - "Verify sub using exact match (not wildcard) — see AP-7"
+      - "Verify exp"
+    common_errors:
+      - error: InvalidIdentityToken
+        cause: "OIDC issuer not configured in IAM OIDC provider"
+        fix: "Register https://token.actions.githubusercontent.com as OIDC provider in cloud IAM"
+      - error: AccessDenied
+        cause: "Trust policy sub condition doesn't match workflow"
+        fix: "Update trust policy to match exact repo:org/repo:ref:refs/heads/branch"
+    anti_patterns:
+      - "AP-7: Wildcard sub condition (repo:org/*)"
+
+  - id: mech:gitlab-ci-oidc
+    name: "GitLab CI OIDC"
+    aliases: ["GitLab id_token"]
+    status: stable
+    rfc: "GitLab CI OIDC documentation"
+    token_type: jwt
+    lifetime: short
+    lifetime_typical: "~300s"
+    holder_bound: false
+    revocable: short_expiry
+    requires_user: false
+    attestation_mechanism: gitlab_ci_runtime
+    rotation_mechanism: per_job
+    security_assurance: medium
+    use_case:
+      - cicd_identity
+      - cloud_deployment
+    runtimes:
+      - platform:gitlab-ci
+    wire_format_examples:
+      - description: "id_tokens configuration in .gitlab-ci.yml"
+        config: |
+          job:
+            id_tokens:
+              GCP_TOKEN:
+                aud: https://iam.googleapis.com/projects/...
+    claims:
+      - name: sub
+        required: true
+        description: "project_path:mygroup/myproject:ref_type:branch:ref:main"
+      - name: iss
+        required: true
+        description: "https://gitlab.com (or self-hosted URL)"
+      - name: namespace_id
+        required: true
+        description: "Numeric namespace ID"
+      - name: project_id
+        required: true
+        description: "Numeric project ID"
+      - name: ref
+        required: true
+        description: "Branch or tag name"
+      - name: ref_type
+        required: true
+        description: "branch or tag"
+    production_readiness: ga
+    implementation_complexity: 2
+    last_verified: "2026-05-07"
+    anti_patterns:
+      - "AP-7: Wildcard namespace or project in trust conditions"
+
+  - id: mech:circleci-oidc
+    name: "CircleCI OIDC"
+    aliases: ["CIRCLE_OIDC_TOKEN"]
+    status: stable
+    token_type: jwt
+    lifetime: short
+    holder_bound: false
+    revocable: short_expiry
+    requires_user: false
+    attestation_mechanism: circleci_runtime
+    rotation_mechanism: per_job
+    security_assurance: medium
+    use_case:
+      - cicd_identity
+      - cloud_deployment
+    runtimes:
+      - platform:circleci
+    claims:
+      - name: sub
+        required: true
+        description: "org/<org-uuid>/project/<project-uuid>/user/<user-uuid>"
+      - name: iss
+        required: true
+        description: "https://oidc.circleci.com/org/<org-uuid>"
+      - name: aud
+        required: true
+        description: "Cloud STS audience"
+    production_readiness: ga
+    implementation_complexity: 2
+    last_verified: "2026-05-07"
+
+  - id: mech:mcp-oauth21
+    name: "MCP OAuth 2.1"
+    aliases: ["MCP Authorization", "MCP auth"]
+    status: stable
+    rfc: "MCP Authorization Spec 2025-03-26; RFC 9728; RFC 8707"
+    token_type: jwt_or_opaque
+    lifetime: short
+    holder_bound: false
+    revocable: yes
+    requires_user: false
+    attestation_mechanism: none
+    rotation_mechanism: sdk_managed
+    security_assurance: medium
+    use_case:
+      - mcp_client_to_server
+      - tool_access
+    frameworks:
+      - framework:claude-mcp
+      - framework:openai-agents
+    runtimes:
+      - platform:any
+    wire_format_examples:
+      - description: "Protected Resource Metadata discovery"
+        response: |
+          {
+            "resource": "https://api.mytool.com/mcp",
+            "authorization_servers": ["https://auth.mytool.com"],
+            "bearer_methods_supported": ["header"]
+          }
+      - description: "API call with bearer token"
+        request: |
+          GET /tools HTTP/1.1
+          Authorization: Bearer eyJ...
+    pattern:
+      - sts-token-exchange
+    production_readiness: ga
+    implementation_complexity: 3
+    last_verified: "2026-05-07"
+    spec_version: "MCP Authorization 2025-03-26; 2025-06-18"
+    common_errors:
+      - error: redirect_loop
+        cause: "resource_metadata SSRF; malicious server redirecting to attacker-controlled AS"
+        fix: "Validate discovered issuer against pre-configured allowlist"
+    anti_patterns:
+      - "AP-5: Fetching JWKS from resource_metadata without issuer validation"
+
+  - id: mech:a2a-jws
+    name: "A2A Protocol (JWS-signed AgentCard)"
+    aliases: ["Google A2A", "agent-to-agent protocol"]
+    status: stable
+    rfc: "A2A Protocol Specification"
+    token_type: jws_signed_request
+    lifetime: short
+    holder_bound: true
+    revocable: false
+    requires_user: false
+    attestation_mechanism: none
+    rotation_mechanism: manual
+    security_assurance: medium
+    use_case:
+      - agent_to_agent
+      - cross_org
+    frameworks:
+      - framework:crewai
+      - framework:google-adk
+    wire_format_examples:
+      - description: "AgentCard location"
+        url: "https://agent.example.com/.well-known/agent.json"
+      - description: "A2A call with bearer and JWS signature"
+        request: |
+          POST /agent/task HTTP/1.1
+          Authorization: Bearer <oauth2_bearer>
+          Content-Type: application/json
+
+          { "message": {...}, "signature": "<jws_compact>" }
+    pattern: []
+    production_readiness: ga
+    implementation_complexity: 3
+    last_verified: "2026-05-07"
+    common_errors:
+      - error: stale_agent_card
+        cause: "AgentCard cached too long; key rotation occurred"
+        fix: "Set max AgentCard cache TTL to 3600s; re-fetch on auth failure"
+    anti_patterns:
+      - "Caching AgentCards indefinitely (no revocation mechanism in spec)"
+
+  - id: mech:ciba
+    name: "CIBA (Client Initiated Backchannel Authentication)"
+    aliases: ["backchannel auth", "CIBA Core 1.0"]
+    status: stable
+    rfc: "CIBA Core 1.0; FAPI CIBA Profile"
+    token_type: jwt
+    lifetime: short
+    holder_bound: false
+    revocable: yes
+    requires_user: true
+    attestation_mechanism: none
+    rotation_mechanism: manual_refresh
+    security_assurance: high
+    use_case:
+      - async_user_auth
+      - long_running_agents
+      - high_risk_operations
+      - headless_with_user_consent
+    wire_format_examples:
+      - description: "Backchannel authorization request"
+        request: |
+          POST /bc-authorize HTTP/1.1
+          Content-Type: application/x-www-form-urlencoded
+
+          client_id=agent-client
+          &scope=read:medical-records
+          &login_hint=user@example.com
+          &binding_message=Agent requests lab results. Approve?
+      - description: "Poll response (pending)"
+        response: |
+          {"error": "authorization_pending"}
+      - description: "Poll response (approved)"
+        response: |
+          {"access_token": "...", "token_type": "Bearer", "expires_in": 3600}
+    production_readiness: ga
+    implementation_complexity: 4
+    last_verified: "2026-05-07"
+
+  - id: mech:capability-tokens
+    name: "Capability Tokens (Biscuits / Macaroons)"
+    aliases: ["Biscuits", "Macaroons", "OCap tokens"]
+    status: experimental
+    rfc: null
+    token_type: capability_token
+    lifetime: short
+    holder_bound: true
+    revocable: false
+    requires_user: false
+    attestation_mechanism: none
+    rotation_mechanism: attenuation_by_holder
+    security_assurance: high
+    use_case:
+      - high_velocity_delegation
+      - offline_attenuation
+      - deep_delegation_chains
+    production_readiness: experimental
+    implementation_complexity: 4
+    last_verified: "2026-05-07"
+    anti_patterns:
+      - "Using Biscuits/Macaroons without short lifetimes (no revocation mechanism)"
+
+  - id: mech:aws-irsa
+    name: "AWS IRSA (IAM Roles for Service Accounts)"
+    aliases: ["IRSA"]
+    status: stable
+    rfc: "AWS IRSA documentation"
+    token_type: aws_temporary_credentials
+    lifetime: short
+    lifetime_typical: "3600s–43200s"
+    holder_bound: false
+    revocable: short_expiry
+    requires_user: false
+    attestation_mechanism: k8s_api
+    rotation_mechanism: platform_automatic
+    security_assurance: medium
+    use_case:
+      - eks_workload_identity
+      - aws_api_access
+    runtimes:
+      - platform:eks
+    pattern:
+      - workload-attestation
+      - sts-token-exchange
+      - automatic-credential-rotation
+    production_readiness: ga
+    implementation_complexity: 2
+    last_verified: "2026-05-07"
+
+  - id: mech:gcp-workload-identity
+    name: "GCP Workload Identity Federation"
+    aliases: ["GCP WIF", "GKE Workload Identity"]
+    status: stable
+    rfc: "GCP Workload Identity Federation documentation"
+    token_type: gcp_access_token
+    lifetime: short
+    lifetime_typical: "3600s"
+    holder_bound: false
+    revocable: short_expiry
+    requires_user: false
+    attestation_mechanism: gke_metadata_server
+    rotation_mechanism: platform_automatic
+    security_assurance: medium
+    use_case:
+      - gke_workload_identity
+      - gcp_api_access
+      - cross_cloud
+    runtimes:
+      - platform:gke
+      - platform:github-actions
+      - platform:gitlab-ci
+    pattern:
+      - workload-attestation
+      - sts-token-exchange
+      - automatic-credential-rotation
+    production_readiness: ga
+    implementation_complexity: 2
+    last_verified: "2026-05-07"
+
+  - id: mech:azure-managed-identity
+    name: "Azure Managed Identity"
+    aliases: ["Azure MI", "UAMI", "SAMI"]
+    status: stable
+    rfc: "Azure Managed Identity documentation"
+    token_type: azure_access_token
+    lifetime: short
+    lifetime_typical: "3600s"
+    holder_bound: false
+    revocable: short_expiry
+    requires_user: false
+    attestation_mechanism: azure_imds
+    rotation_mechanism: platform_automatic
+    security_assurance: medium
+    use_case:
+      - azure_workload_identity
+      - azure_api_access
+    runtimes:
+      - platform:aks
+      - platform:azure-functions
+      - platform:container-apps
+    pattern:
+      - workload-attestation
+      - automatic-credential-rotation
+    production_readiness: ga
+    implementation_complexity: 2
+    last_verified: "2026-05-07"
+
+  - id: mech:oidc-a
+    name: "OIDC-A (OpenID Connect for Agents)"
+    aliases: ["OIDC for Agents"]
+    status: experimental
+    rfc: "OpenID Foundation AI CG proposal"
+    token_type: oidc_id_token
+    lifetime: short
+    holder_bound: false
+    revocable: short_expiry
+    requires_user: false
+    attestation_mechanism: none
+    rotation_mechanism: manual_refresh
+    security_assurance: medium
+    use_case:
+      - agent_identity_assertion
+      - model_verification
+    frameworks:
+      - framework:azure-foundry
+      - framework:bedrock-agentcore
+    production_readiness: experimental
+    implementation_complexity: 3
+    last_verified: "2026-05-07"
+    deprecation:
+      status: active
+      since: null
+      sunset: null
+      replacement: null
+
+  - id: mech:ssf
+    name: "Shared Signals Framework (SSF)"
+    aliases: ["OpenID SSF", "RISC"]
+    status: stable
+    rfc: "OpenID Shared Signals Framework"
+    token_type: event_jwt
+    use_case:
+      - lifecycle_propagation
+      - real_time_revocation
+      - cross_domain_deprovisioning
+    production_readiness: ga
+    implementation_complexity: 4
+    last_verified: "2026-05-07"
+
+  - id: mech:fapi2
+    name: "FAPI 2.0 (Financial-grade API)"
+    aliases: ["FAPI 2.0 Security Profile"]
+    status: stable
+    rfc: "FAPI 2.0 Security Profile"
+    token_type: dpop_bound_jwt
+    lifetime: short
+    holder_bound: true
+    revocable: yes
+    requires_user: true
+    security_assurance: very_high
+    use_case:
+      - financial_transactions
+      - high_value_operations
+      - regulated_industries
+    pattern:
+      - sts-token-exchange
+    relationships:
+      composes_with:
+        - mech:dpop
+        - mech:mtls-certificate-bound
+        - mech:oauth2.par
+        - mech:oauth2.rar
+    production_readiness: ga
+    implementation_complexity: 5
+    last_verified: "2026-05-07"
+
+scenarios:
+
+  - id: scenario:gha-to-mcp
+    description: "GitHub Actions workflow calling MCP server as machine identity"
+    source_runtime: github_actions
+    target_type: mcp_server
+    identity_kind: machine
+    steps:
+      - step: 1
+        mechanism: mech:github-actions-oidc
+        action: "Request GHA OIDC token (permissions: id-token: write)"
+        produces: oidc_jwt
+      - step: 2
+        mechanism: mech:oauth2.token-exchange
+        action: "Exchange GHA OIDC at cloud STS"
+        consumes: oidc_jwt
+        produces: cloud_access_token
+      - step: 3
+        mechanism: mech:mcp-oauth21
+        action: "Call MCP server with OAuth 2.1 Bearer token"
+        consumes: cloud_access_token
+        wire_format: "Authorization: Bearer <cloud_access_token>"
+    references:
+      - mech:github-actions-oidc
+      - mech:oauth2.token-exchange
+      - mech:mcp-oauth21
+
+  - id: scenario:eks-parallel-creds
+    description: "EKS pod calling Anthropic API and private MCP server simultaneously"
+    source_runtime: eks_pod
+    target_type: multiple
+    identity_kind: machine
+    steps:
+      - step: 1a
+        mechanism: mech:aws-irsa
+        action: "Pod uses IRSA credentials for AWS services"
+        produces: aws_credentials
+      - step: 1b
+        mechanism: mech:spiffe-x509-svid
+        action: "Pod presents X.509-SVID for internal MCP server mTLS"
+        produces: mtls_cert
+      - step: 2a
+        action: "Anthropic API call"
+        wire_format: "x-api-key: <rotated_key_from_secrets_manager>"
+      - step: 2b
+        action: "Internal MCP server (mTLS, no Authorization header)"
+    references:
+      - mech:aws-irsa
+      - mech:spiffe-x509-svid
+
+  - id: scenario:k8s-to-gcp
+    description: "Kubernetes pod (non-GKE) calling GCP service via WIF"
+    source_runtime: eks_pod
+    target_type: gcp_service
+    identity_kind: machine
+    steps:
+      - step: 1
+        mechanism: mech:k8s-projected-sa-token
+        action: "Read projected SA token (audience: GCP WIF provider)"
+        produces: k8s_oidc_jwt
+      - step: 2
+        mechanism: mech:gcp-workload-identity
+        action: "Exchange K8s token at GCP STS"
+        consumes: k8s_oidc_jwt
+        produces: gcp_access_token
+      - step: 3
+        action: "Call GCP service"
+        wire_format: "Authorization: Bearer <gcp_access_token>"
+    references:
+      - mech:k8s-projected-sa-token
+      - mech:gcp-workload-identity
+
+  - id: scenario:delegation-chain
+    description: "User-delegated agent delegating to sub-agent via RFC 8693"
+    source_runtime: any
+    target_type: sub_agent
+    identity_kind: user_delegated
+    steps:
+      - step: 1
+        mechanism: mech:oauth2.auth-code-pkce
+        action: "User authorizes Agent A"
+        produces: user_delegated_token
+      - step: 2
+        mechanism: mech:oauth2.token-exchange
+        action: "Agent A exchanges token for Agent B, narrowing scope"
+        consumes: user_delegated_token
+        produces: agent_b_token
+      - step: 3
+        action: "Agent B calls downstream API"
+        wire_format: "Authorization: Bearer <agent_b_token>"
+        note: "act claim: { sub: user, act: { sub: agent-b, act: { sub: agent-a } } }"
+    references:
+      - mech:oauth2.auth-code-pkce
+      - mech:oauth2.token-exchange
+
+  - id: scenario:cicd-no-secrets
+    description: "CI/CD pipeline deploying to cloud without stored secrets"
+    source_runtime: github_actions
+    target_type: cloud_iam
+    identity_kind: machine
+    steps:
+      - step: 1
+        mechanism: mech:github-actions-oidc
+        action: "Obtain GHA OIDC token"
+        produces: oidc_jwt
+      - step: 2
+        mechanism: mech:gcp-workload-identity
+        action: "Exchange at cloud WIF"
+        consumes: oidc_jwt
+        produces: cloud_token
+      - step: 3
+        action: "Deploy to cloud"
+    references:
+      - mech:github-actions-oidc
+      - mech:gcp-workload-identity
+
+  - id: scenario:device-grant
+    description: "Headless agent requesting user consent via Device Authorization Grant"
+    source_runtime: headless_agent
+    target_type: user_authorized_api
+    identity_kind: user_delegated
+    steps:
+      - step: 1
+        mechanism: mech:oauth2.device-auth
+        action: "Request device code"
+        produces: device_code
+      - step: 2
+        action: "Display user_code to user via out-of-band channel"
+      - step: 3
+        action: "Poll token endpoint until user approves"
+        produces: access_token
+    references:
+      - mech:oauth2.device-auth
+
+  - id: scenario:ciba-reauth
+    description: "Long-running async agent requesting mid-task re-authorization"
+    source_runtime: autonomous_agent
+    target_type: high_risk_api
+    identity_kind: user_delegated
+    steps:
+      - step: 1
+        mechanism: mech:ciba
+        action: "Submit backchannel auth request with binding_message"
+        produces: auth_req_id
+      - step: 2
+        action: "Agent pauses task; polls for user approval"
+      - step: 3
+        action: "User approves on trusted device"
+        produces: new_access_token
+      - step: 4
+        action: "Agent resumes task with new token"
+    references:
+      - mech:ciba
+
+  - id: scenario:fapi2-high-value
+    description: "High-value financial transaction with FAPI 2.0 (DPoP + mTLS + PAR + RAR)"
+    source_runtime: financial_agent
+    target_type: financial_api
+    identity_kind: user_delegated
+    steps:
+      - step: 1
+        mechanism: mech:oauth2.par
+        action: "Submit PAR with authorization_details"
+        produces: request_uri
+      - step: 2
+        mechanism: mech:oauth2.auth-code-pkce
+        action: "Complete auth code flow"
+        produces: auth_code
+      - step: 3
+        mechanism: mech:dpop
+        action: "Exchange code for DPoP-bound token"
+        produces: dpop_token
+      - step: 4
+        mechanism: mech:mtls-certificate-bound
+        action: "API call with DPoP + mTLS client certificate"
+    references:
+      - mech:fapi2
+      - mech:dpop
+      - mech:mtls-certificate-bound
+      - mech:oauth2.par
+      - mech:oauth2.rar
+
+  - id: scenario:api-key-migration
+    description: "Step-by-step migration from long-lived API keys to workload identity"
+    steps:
+      - step: 1
+        action: "Audit: find all API keys in code and CI"
+        tool: "git log -S 'API_KEY' --all"
+      - step: 2
+        action: "Enable workload identity on compute platform"
+      - step: 3
+        action: "Deploy dual-credential: WI first, API key fallback"
+      - step: 4
+        action: "Reduce API key TTL to 7 days"
+      - step: 5
+        action: "Remove API key after all workloads confirmed using WI"
+    references:
+      - mech:aws-irsa
+      - mech:gcp-workload-identity
+      - mech:azure-managed-identity
+
+  - id: scenario:on-prem-to-cloud
+    description: "On-premises agent calling cloud services via X.509 trust anchor"
+    source_runtime: on_premises_server
+    target_type: cloud_iam
+    identity_kind: machine
+    steps:
+      - step: 1
+        mechanism: mech:aws-iam-roles-anywhere
+        action: "Present X.509 certificate to AWS IAM Roles Anywhere"
+        produces: aws_temporary_credentials
+      - step: 2
+        action: "Call AWS services with temporary credentials"
+    references:
+      - mech:aws-iam-roles-anywhere
+
+  - id: scenario:cross-org-a2a
+    description: "Cross-organizational A2A call with JWS-signed request"
+    source_runtime: any_agent
+    target_type: partner_agent
+    identity_kind: machine
+    steps:
+      - step: 1
+        action: "Fetch partner AgentCard (max 1h cache TTL)"
+        url: "https://partner.example.com/.well-known/agent.json"
+      - step: 2
+        mechanism: mech:a2a-jws
+        action: "Sign request body with JWS (JCS canonicalization)"
+        produces: signed_request
+      - step: 3
+        action: "POST to partner agent endpoint"
+        wire_format: |
+          Authorization: Bearer <oauth2_bearer>
+          Content-Type: application/json
+    references:
+      - mech:a2a-jws
+
+  - id: scenario:three-hop-attenuation
+    description: "Three-hop delegation with scope attenuation at each hop"
+    steps:
+      - step: 1
+        mechanism: mech:oauth2.auth-code-pkce
+        action: "User authorizes Agent A (scope: read:write:delete)"
+      - step: 2
+        mechanism: mech:oauth2.token-exchange
+        action: "Agent A exchanges for Agent B token (scope: read:write)"
+      - step: 3
+        mechanism: mech:oauth2.token-exchange
+        action: "Agent B exchanges for Agent C token (scope: read)"
+      - note: "STS enforces scope ⊆ at each hop; no escalation possible"
+    references:
+      - mech:oauth2.token-exchange
+
+  - id: scenario:browser-agent
+    description: "Browser automation agent operating under user session"
+    note: "No standard for proving AI agent identity in browser context. Web Bot Auth proposal is early-stage. Current mitigation: dedicated service account with minimum scopes."
+    references: []
+
+  - id: scenario:three-hop-biscuit
+    description: "Three-hop delegation using Biscuits for low-latency offline attenuation"
+    steps:
+      - step: 1
+        action: "Issuer creates Biscuit token with full permissions"
+      - step: 2
+        action: "Agent A attenuates to read:write (offline, no STS call)"
+      - step: 3
+        action: "Agent B attenuates to read:specific-resource (offline)"
+      - step: 4
+        action: "Agent C presents final attenuated Biscuit to resource server"
+      - note: "No STS round-trips. Suitable for sub-100ms delegation chains."
+    references:
+      - mech:capability-tokens
+
+glossary:
+  - id: term:holder-bound
+    term: "Holder-bound"
+    definition: "A token is holder-bound when the recipient must prove possession of a private key to use it (DPoP, mTLS certificate-bound). Contrast: bearer token where possession alone grants authorization."
+
+  - id: term:m2m
+    term: "Machine-to-machine (M2M)"
+    definition: "Service calling another service without a human user in the loop."
+
+  - id: term:workload-identity
+    term: "Workload Identity"
+    definition: "An identity assigned to a running compute workload (pod, function, container) by its execution environment, rather than managed credentials."
+
+  - id: term:scope-attenuation
+    term: "Scope Attenuation"
+    definition: "Progressively narrowing the set of permissions at each delegation hop. A delegated token can never grant more permissions than the delegating token."
+
+  - id: term:sts
+    term: "Security Token Service (STS)"
+    definition: "A service that validates one credential type and issues a new one, potentially with different scope, audience, or format. Example: AWS STS, GCP STS."
+
+  - id: term:dpop
+    term: "DPoP"
+    definition: "Demonstration of Proof-of-Possession (RFC 9449). HTTP-layer token binding via ephemeral key pair and per-request proof JWT."
+
+  - id: term:pkce
+    term: "PKCE"
+    definition: "Proof Key for Code Exchange (RFC 7636). S256 method mandatory. Prevents authorization code interception attacks."
+
+  - id: term:ocap
+    term: "Object-Capability (OCap)"
+    definition: "Security model where access is controlled by unforgeable tokens representing permissions, rather than identity + ACL lookup. Biscuits and Macaroons implement OCap."
+
+  - id: term:deprovisioning
+    term: "De-provisioning"
+    definition: "Permanent, complete removal of an agent identity from all systems. Distinct from revocation (credential invalidation while identity persists)."
+
+  - id: term:act-claim
+    term: "act claim"
+    definition: "JWT claim identifying the actor currently acting on behalf of the subject. Nested act objects represent delegation chains (RFC 8693)."
+
+  - id: term:wif
+    term: "Workload Identity Federation (WIF)"
+    definition: "Cloud provider feature trusting external OIDC issuers, enabling workloads to exchange OIDC tokens for cloud-native credentials without stored secrets."
+
+decision_tree:
+  - id: rule-gha-mcp-machine
+    if:
+      runtime: github_actions
+      target_type: mcp_server
+      identity_kind: machine
+    then:
+      scenario: scenario:gha-to-mcp
+
+  - id: rule-eks-external-api-m2m
+    if:
+      runtime: eks_pod
+      target_type: external_api
+      identity_kind: machine
+    then:
+      primary_mechanism: mech:aws-irsa
+      then: mech:oauth2.client-credentials
+
+  - id: rule-user-delegation
+    if:
+      identity_kind: user_delegated
+      target_type: any
+    then:
+      mechanism: mech:oauth2.token-exchange
+
+  - id: rule-cicd-cloud
+    if:
+      runtime: github_actions
+      target_type: cloud_iam
+      identity_kind: machine
+    then:
+      primary_mechanism: mech:github-actions-oidc
+      then: mech:gcp-workload-identity
+
+  - id: rule-deep-delegation-low-latency
+    if:
+      identity_kind: delegated_chain
+      latency_constraint: low
+    then:
+      mechanism: mech:capability-tokens
+
+  - id: rule-high-assurance
+    if:
+      security_assurance_required: very_high
+    then:
+      mechanism: mech:fapi2
+
+  - id: rule-headless-user-consent
+    if:
+      requires_user: true
+      agent_type: headless
+    then:
+      mechanism: mech:oauth2.device-auth
+
+  - id: rule-async-reauth
+    if:
+      agent_type: long_running_autonomous
+      requires_mid_task_reauth: true
+    then:
+      mechanism: mech:ciba
+
+  - id: rule-cross-org-agent
+    if:
+      target_type: partner_agent
+      trust_domain: different_org
+    then:
+      mechanism: mech:a2a-jws
+
+  - id: rule-on-prem-to-cloud
+    if:
+      runtime: on_premises
+      target_type: cloud_iam
+    then:
+      mechanism: mech:aws-iam-roles-anywhere
+
+anti_patterns:
+  - id: threat:alg-none
+    name: "AP-1: alg:none Acceptance"
+    severity: critical
+    description: "JWT library accepts alg:none, stripping signature verification"
+    detection: "Audit JWT validation for verify=False or algorithms=None"
+    fix: "Explicit algorithm allowlist in every JWT decode call"
+
+  - id: threat:alg-confusion
+    name: "AP-2: RS256/HS256 Algorithm Confusion"
+    severity: critical
+    description: "Attacker uses RSA public key as HMAC secret to forge tokens"
+    detection: "Check if same key is used for RS256 and HS256 paths"
+    fix: "Never derive algorithm from token header; hard-code expected algorithm"
+
+  - id: threat:pkce-plain
+    name: "AP-3: PKCE plain Method"
+    severity: high
+    description: "code_challenge is observable in URL, defeating PKCE protection"
+    detection: "Check for code_challenge_method=plain in auth requests"
+    fix: "S256 only; servers must reject plain"
+
+  - id: threat:wildcard-aud
+    name: "AP-4: Wildcard aud Validation"
+    severity: high
+    description: "Prefix or substring match for aud claim enables confused deputy"
+    detection: "Check validation code for substring/regex aud matching"
+    fix: "Exact string match; aud must be in pre-configured list"
+
+  - id: threat:jku-header
+    name: "AP-5: JWKS from jku/x5u"
+    severity: critical
+    description: "Attacker supplies their own JWKS URL in token header"
+    detection: "Check for code fetching JWKS from jwt.get_unverified_header"
+    fix: "Always use pre-configured JWKS endpoint; never from token header"
+
+  - id: threat:long-lived-apikey-env
+    name: "AP-6: Long-Lived API Keys in Env Vars"
+    severity: high
+    description: "API key in container env; readable by any process; indefinite compromise on exfiltration"
+    detection: "grep for export.*KEY= or API_KEY in Dockerfiles and CI configs"
+    fix: "Workload identity; or secrets manager with rotation"
+
+  - id: threat:wildcard-cicd-sub
+    name: "AP-7: Wildcard CI/CD sub Conditions"
+    severity: high
+    description: "Any repo in org can assume cloud role"
+    detection: "Check IAM trust policies for StringLike with repo:org/*"
+    fix: "Fully qualified sub: repo:org/repo:ref:refs/heads/main"
+
+  - id: threat:token-forwarding
+    name: "AP-8: Token Forwarding Without Audience Re-Validation"
+    severity: high
+    description: "Token for service A forwarded to service B; confused deputy"
+    detection: "Code review for direct token forwarding between service calls"
+    fix: "RFC 8693 token exchange to obtain audience-appropriate token"
